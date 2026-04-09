@@ -29,29 +29,32 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'File too large (max 10MB)' });
     }
 
-    // Upload to Cloudinary (unsigned upload)
-    const cloudName = 'demo';
-    const uploadPreset = 'ml_default';
+    // Convert buffer to base64
+    const base64Image = buffer.toString('base64');
 
-    const formData = new FormData();
-    formData.append('file', new Blob([buffer]), 'image.jpg');
-    formData.append('upload_preset', uploadPreset);
+    // Upload to ImgBB API
+    const params = new URLSearchParams();
+    params.append('image', base64Image);
+    params.append('type', 'base64');
 
-    const response = await fetch(`https://api.cloudinary.com/v1/${cloudName}/image/upload`, {
+    const response = await fetch('https://api.imgbb.com/1/upload?key=97f738e5e871f82e42b03a96064aa935', {
       method: 'POST',
-      body: formData,
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: params,
     });
 
     const data = await response.json();
 
-    if (!data.secure_url) {
-      throw new Error(data.error?.message || 'Upload failed');
+    if (response.status !== 200 || !data.success) {
+      console.error('ImgBB error:', data);
+      throw new Error(data.error?.message || `HTTP ${response.status}`);
     }
 
     return res.status(200).json({
       success: true,
-      url: data.secure_url,
-      publicId: data.public_id,
+      url: data.data.url,
+      deleteUrl: data.data.delete_url,
+      filename: data.data.title,
       size: buffer.length,
     });
   } catch (error) {
