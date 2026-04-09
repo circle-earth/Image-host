@@ -1,3 +1,5 @@
+import { put } from '@vercel/blob';
+
 export const config = {
   api: {
     bodyParser: false,
@@ -29,30 +31,19 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'File too large (max 8MB)' });
     }
 
-    // Convert to base64 for ImgBB API
-    const base64Image = buffer.toString('base64');
+    const filename = req.headers['x-filename'] || `img-${Date.now()}.jpg`;
+    const safeFilename = filename.replace(/[^a-zA-Z0-9.-]/g, '_');
 
-    // Upload to ImgBB (free, no API key required for basic upload)
-    const imgbbResponse = await fetch('https://api.imgbb.com/1/upload', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        key: '97f738e5e871f82e42b03a96064aa935',
-        image: base64Image,
-      }),
+    // Upload to Vercel Blob
+    const blob = await put(safeFilename, buffer, {
+      access: 'public',
     });
-
-    const imgbbData = await imgbbResponse.json();
-
-    if (!imgbbData.success) {
-      throw new Error(imgbbData.error?.message || 'ImgBB upload failed');
-    }
 
     return res.status(200).json({
       success: true,
-      url: imgbbData.data.url,
-      deleteUrl: imgbbData.data.delete_url,
-      filename: imgbbData.data.title,
+      url: blob.url,
+      downloadUrl: blob.downloadUrl,
+      pathname: blob.pathname,
       size: buffer.length,
     });
   } catch (error) {
