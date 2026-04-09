@@ -6,7 +6,6 @@ export const config = {
 };
 
 export default async function handler(req, res) {
-  // Enable CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-filename');
@@ -26,41 +25,41 @@ export default async function handler(req, res) {
     }
     const buffer = Buffer.concat(chunks);
 
-    // Validate image
     if (buffer.length > 8 * 1024 * 1024) {
-      return res.status(400).json({
-        error: 'File too large',
-        message: 'Maximum file size is 8MB'
-      });
+      return res.status(400).json({ error: 'File too large (max 8MB)' });
     }
 
-    // Get filename from header or generate one
-    const filename = req.headers['x-filename'] || `img-${Date.now()}.jpg`;
-    const safeFilename = filename.replace(/[^a-zA-Z0-9.-]/g, '_');
+    // Convert to base64 for ImgBB API
+    const base64Image = buffer.toString('base64');
 
-    // Return image as base64 (for demo purposes without Vercel Blob)
-    const base64 = buffer.toString('base64');
-    const dataUrl = `data:image/jpeg;base64,${base64}`;
+    // Upload to ImgBB (free, no API key required for basic upload)
+    const imgbbResponse = await fetch('https://api.imgbb.com/1/upload', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        key: '97f738e5e871f82e42b03a96064aa935',
+        image: base64Image,
+      }),
+    });
 
-    // Generate a unique ID for this upload
-    const uploadId = Math.random().toString(36).substring(2, 15);
+    const imgbbData = await imgbbResponse.json();
+
+    if (!imgbbData.success) {
+      throw new Error(imgbbData.error?.message || 'ImgBB upload failed');
+    }
 
     return res.status(200).json({
       success: true,
-      url: `/api/image/${uploadId}`,
-      downloadUrl: dataUrl,
-      id: uploadId,
-      filename: safeFilename,
+      url: imgbbData.data.url,
+      deleteUrl: imgbbData.data.delete_url,
+      filename: imgbbData.data.title,
       size: buffer.length,
-      // Store in memory (temporary - for demo only)
-      // For production, use Vercel Blob or external storage
-      message: 'Image uploaded! Note: This is a demo - images are not persisted without storage.'
     });
   } catch (error) {
     console.error('Upload error:', error);
     return res.status(500).json({
       error: 'Upload failed',
-      message: error.message || 'Unknown error'
+      message: error.message || 'Unknown error',
     });
   }
 }
