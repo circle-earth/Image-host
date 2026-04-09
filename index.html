@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Image Host - Vercel</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .container {
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      border-radius: 20px;
+      padding: 40px;
+      max-width: 500px;
+      width: 100%;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+    h1 {
+      color: #fff;
+      text-align: center;
+      margin-bottom: 10px;
+      font-size: 28px;
+    }
+    p.subtitle {
+      color: rgba(255, 255, 255, 0.7);
+      text-align: center;
+      margin-bottom: 30px;
+    }
+    .upload-area {
+      border: 2px dashed rgba(255, 255, 255, 0.3);
+      border-radius: 15px;
+      padding: 40px 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      background: rgba(255, 255, 255, 0.05);
+    }
+    .upload-area:hover, .upload-area.dragover {
+      border-color: #00d4ff;
+      background: rgba(0, 212, 255, 0.1);
+    }
+    .upload-area svg {
+      width: 60px;
+      height: 60px;
+      fill: rgba(255, 255, 255, 0.5);
+      margin-bottom: 15px;
+    }
+    .upload-area p {
+      color: rgba(255, 255, 255, 0.7);
+      font-size: 16px;
+    }
+    .upload-area input {
+      display: none;
+    }
+    .preview {
+      margin-top: 20px;
+      border-radius: 10px;
+      overflow: hidden;
+      display: none;
+    }
+    .preview.show {
+      display: block;
+    }
+    .preview img {
+      width: 100%;
+      max-height: 300px;
+      object-fit: contain;
+      background: #000;
+      border-radius: 10px;
+    }
+    .result {
+      margin-top: 20px;
+      padding: 15px;
+      background: rgba(0, 255, 136, 0.1);
+      border: 1px solid rgba(0, 255, 136, 0.3);
+      border-radius: 10px;
+      display: none;
+    }
+    .result.show {
+      display: block;
+    }
+    .result a {
+      color: #00ff88;
+      word-break: break-all;
+      font-size: 14px;
+    }
+    .loading {
+      display: none;
+      text-align: center;
+      margin-top: 20px;
+    }
+    .loading.show {
+      display: block;
+    }
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid rgba(255, 255, 255, 0.2);
+      border-top-color: #00d4ff;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin: 0 auto;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    .loading p {
+      color: rgba(255, 255, 255, 0.7);
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>📸 Image Host</h1>
+    <p class="subtitle">Upload images to Vercel Blob</p>
+
+    <div class="upload-area" id="uploadArea">
+      <svg viewBox="0 0 24 24"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z"/></svg>
+      <p>Drag & drop or click to upload</p>
+      <input type="file" id="fileInput" accept="image/*">
+    </div>
+
+    <div class="preview" id="preview">
+      <img id="previewImg" alt="Preview">
+    </div>
+
+    <div class="loading" id="loading">
+      <div class="spinner"></div>
+      <p>Uploading...</p>
+    </div>
+
+    <div class="result" id="result">
+      <p style="color: #fff; margin-bottom: 10px;">Public URL:</p>
+      <a id="imageUrl" href="#" target="_blank"></a>
+    </div>
+  </div>
+
+  <script>
+    const uploadArea = document.getElementById('uploadArea');
+    const fileInput = document.getElementById('fileInput');
+    const preview = document.getElementById('preview');
+    const previewImg = document.getElementById('previewImg');
+    const loading = document.getElementById('loading');
+    const result = document.getElementById('result');
+    const imageUrl = document.getElementById('imageUrl');
+
+    uploadArea.addEventListener('click', () => fileInput.click());
+
+    uploadArea.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      uploadArea.classList.add('dragover');
+    });
+
+    uploadArea.addEventListener('dragleave', () => {
+      uploadArea.classList.remove('dragover');
+    });
+
+    uploadArea.addEventListener('drop', (e) => {
+      e.preventDefault();
+      uploadArea.classList.remove('dragover');
+      const file = e.dataTransfer.files[0];
+      if (file && file.type.startsWith('image/')) {
+        uploadImage(file);
+      }
+    });
+
+    fileInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        uploadImage(file);
+      }
+    });
+
+    async function uploadImage(file) {
+      // Show preview
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        previewImg.src = e.target.result;
+        preview.classList.add('show');
+      };
+      reader.readAsDataURL(file);
+
+      // Upload
+      loading.classList.add('show');
+      result.classList.remove('show');
+
+      try {
+        const response = await fetch('/api/upload', {
+          method: 'POST',
+          headers: {
+            'x-filename': file.name,
+          },
+          body: file,
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          imageUrl.href = data.url;
+          imageUrl.textContent = data.url;
+          result.classList.add('show');
+        } else {
+          alert('Upload failed: ' + data.error);
+        }
+      } catch (error) {
+        alert('Upload failed: ' + error.message);
+      } finally {
+        loading.classList.remove('show');
+      }
+    }
+  </script>
+</body>
+</html>

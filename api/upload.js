@@ -1,0 +1,42 @@
+import { put } from '@vercel/blob';
+
+export const config = {
+  api: {
+    bodyParser: false,
+  },
+};
+
+export default async function handler(req, res) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  try {
+    const chunks = [];
+    for await (const chunk of req) {
+      chunks.push(chunk);
+    }
+    const buffer = Buffer.concat(chunks);
+
+    // Get filename from header or generate one
+    const filename = req.headers['x-filename'] || `img-${Date.now()}.jpg`;
+
+    // Upload to Vercel Blob
+    const blob = await put(filename, buffer, {
+      access: 'public',
+    });
+
+    return res.status(200).json({
+      success: true,
+      url: blob.url,
+      downloadUrl: blob.downloadUrl,
+      pathname: blob.pathname,
+    });
+  } catch (error) {
+    console.error('Upload error:', error);
+    return res.status(500).json({
+      error: 'Upload failed',
+      message: error.message
+    });
+  }
+}
